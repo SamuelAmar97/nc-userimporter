@@ -21,8 +21,6 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 # This tool creates Nextcloud users from a CSV file, which you exported from some other software.
-# There is also an extra EduDocs mode, which takes into account the special default settings
-# and security-related peculiarities when importing users in the school sector.
 
 # Copyright (C) 2019-2020 Torsten Markmann
 # Mail: info@uplinked.net 
@@ -84,10 +82,10 @@ config_csvfile = config_xmlsoup.find('csvfile').string
 config_csvDelimiter = config_xmlsoup.find('csvdelimiter').string
 config_csvDelimiterGroups = config_xmlsoup.find('csvdelimitergroups').string
 config_GeneratePassword = config_xmlsoup.find('generatepassword').string
+config_passwordlength = int(config_xmlsoup.find('passwordlength').string)
 config_sslVerify = eval(config_xmlsoup.find('sslverify').string)
 config_language = config_xmlsoup.find('language').string
 config_pdfOneDoc = config_xmlsoup.find('pdfonedoc').string
-config_schoolgroup = config_xmlsoup.find('schoolgroup').string
 
 print("")
 print("###################################################################################")
@@ -227,22 +225,35 @@ qr = qrcode.QRCode(
 
 
 # Function: Generate random password
-# This will generate a random password with 1 random uppercase letter, 3 random lowercase letters,
+# This will generate a random password with 1 random uppercase letter, length-5 random lowercase letters,
 # 3 random digits, and 1 random special character--this can be adjusted as needed.
 # Then it combines each random character and creates a random order.
-def pwgenerator():  # TODO length parameter for config
-    PWUPP = random.SystemRandom().choice(string.ascii_uppercase)
-    PWLOW1 = random.SystemRandom().choice(string.ascii_lowercase)
-    PWLOW2 = random.SystemRandom().choice(string.ascii_lowercase)
-    PWLOW3 = random.SystemRandom().choice(string.ascii_lowercase)
-    PWDIG1 = random.SystemRandom().choice(string.digits)
-    PWDIG2 = random.SystemRandom().choice(string.digits)
-    PWDIG3 = random.SystemRandom().choice(string.digits)
-    PWSPEC = random.SystemRandom().choice('!@*(§')
-    PWD = None
-    PWD = PWUPP + PWLOW1 + PWLOW2 + PWLOW3 + PWDIG1 + PWDIG2 + PWDIG3 + PWSPEC
-    PWD = ''.join(random.sample(PWD, len(PWD)))
-    return (PWD)
+def pwgenerator(length):
+    if length < 8:
+        length = 8
+
+    n_digits = 3
+    n_lowercase = length - 2 - n_digits
+
+    # Add randomly chosen symbols to a list
+    pw_list = []
+    # Upper case letter
+    pw_list.append(random.SystemRandom().choice(string.ascii_uppercase))
+    # Special character
+    pw_list.append(random.SystemRandom().choice('!@*(§'))
+    # Digits
+    for i in range(0, n_digits):
+        pw_list.append(random.SystemRandom().choice(string.digits))
+    # Lower case letters
+    for i in range(0, n_lowercase):
+        pw_list.append(random.SystemRandom().choice(string.ascii_lowercase))
+
+    # Randomly shuffle the symbols
+    random.shuffle(pw_list)
+
+    # Convert the list to string
+    pwd = ''.join(pw_list)
+    return pwd
 
 
 # display expected results before executing CURL
@@ -293,7 +304,7 @@ with codecs.open(os.path.join(appdir, config_csvfile), mode='r', encoding='utf-8
         row[0] = line.translate(mapping)  # convert special characters and umlauts
         if config_GeneratePassword == 'yes':
             if not row[2]:
-                row[2] = pwgenerator()
+                row[2] = pwgenerator(config_passwordlength)
         print("Username:", html.escape(row[0]), "| Display name:", html.escape(row[1]), "| Password: ",
               "*" * len(row[2]) +
               "| Email:", html.escape(row[3]), "| Groups:", html.escape(row[4]), "| Group admin for:",
